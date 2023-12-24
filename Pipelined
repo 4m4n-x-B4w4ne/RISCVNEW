@@ -1,0 +1,328 @@
+#include <iostream>
+#include <vector>
+#include <utility>
+#include "DataMemory.cpp"
+#include "Registerfile.cpp"
+#include "InstructionMemory.cpp"
+#include <fstream>
+#include <string>
+#include "!InstMap.cpp"
+using namespace std;
+struct CWstd{
+    int ALUSrc=0;
+    int MemReg=0;
+    int RegWrite=0;
+    int MemRead=0;
+    int MemWrite=0;
+    int Branch=0;
+    int ALUOp1=0;
+    int ALUOp2=0;
+};
+int PC=0;
+int NPC=0;
+class IFID{
+    public:
+        string IR="000000000000000000000000000000";
+        int DPC=0;
+};
+
+class IDEX{
+    public:
+        int DPC=0;
+        string IMM="000000000000000000000000000000";
+        int RS1=0;
+        int RS2=0;
+        CWstd CW;
+        string FUNC3="000";
+        string FUNC7="0000000";
+        string RdL="00000";
+        string RS1L="00000";
+        string RS2L="00000";
+       
+};
+
+class EXMO{
+    public:
+        CWstd CW;
+        int ALUOUT=0;
+        int RS2=0;
+        string RdL="00000";
+};
+
+class MOWB{
+    public:
+        CWstd CW;
+        int LDOUT=0;
+        int ALUOUT=0;
+        string RdL="00000";
+};
+
+void ControlUnit(string opcode,CWstd &CW){
+   cout<<"in CU"<<notInstMap[opcode]<<endl;
+    if(notInstMap[opcode]=="R"){
+        CW.ALUSrc=0;
+        CW.MemReg=0;
+        CW.RegWrite=1;
+        CW.MemRead=0;
+        CW.MemWrite=0;
+        CW.Branch=0;
+        CW.ALUOp1=1;
+        CW.ALUOp2=0;
+   }
+
+    if(notInstMap[opcode]=="ld"){
+        CW.ALUSrc=1;
+        CW.MemReg=1;
+        CW.RegWrite=1;
+        CW.MemRead=1;
+        CW.MemWrite=0;
+        CW.Branch=0;
+        CW.ALUOp1=0;
+        CW.ALUOp2=0;
+   }
+
+   if(notInstMap[opcode]=="sd"){
+        CW.ALUSrc=1;
+        CW.MemReg=1;
+        CW.RegWrite=0;
+        CW.MemRead=0;
+        CW.MemWrite=1;
+        CW.Branch=0;
+        CW.ALUOp1=0;
+        CW.ALUOp2=0;
+   }
+
+   if(notInstMap[opcode]=="B"){
+        CW.ALUSrc=0;
+        CW.MemReg=1;
+        CW.RegWrite=0;
+        CW.MemRead=0;
+        CW.MemWrite=0;
+        CW.Branch=1;
+        CW.ALUOp1=0;
+        CW.ALUOp2=1;
+   }
+
+   if(notInstMap[opcode]=="I"){
+        CW.ALUSrc=1;
+        CW.MemReg=0;
+        CW.RegWrite=1;
+        CW.MemRead=0;
+        CW.MemWrite=0;
+        CW.Branch=0;
+        CW.ALUOp1=0;
+        CW.ALUOp2=0;
+   } 
+}
+
+
+int ALU(string ALUControlSignal,int rs1,int rs2){
+   int ALUResult=0;
+   if(ALUControlSignal=="0010"){
+        ALUResult=rs1+rs2;
+   }else if(ALUControlSignal=="0110"){
+        ALUResult=rs1-rs2;
+   }else if(ALUControlSignal=="0000"){
+        ALUResult=rs1&rs2;
+   }else if(ALUControlSignal=="0001"){
+        ALUResult=rs1|rs2;
+   }
+   return ALUResult;
+}
+
+string ALUControl(int ALUOp1,int ALUOp2,string func3,string func7){
+    string ALUControlSignal="";
+    if(ALUOp1==0 && ALUOp2==0){
+        ALUControlSignal="0010";
+    }
+    if(ALUOp1==0 && ALUOp2==1){
+        ALUControlSignal="0110";
+    }
+    if(ALUOp1==1 &&ALUOp2==0 &&func7=="0000000"&& func3=="000"){
+        ALUControlSignal="0010";
+    }
+    if(ALUOp1==1 &&ALUOp2==0 &&func7=="0100000"&& func3=="000"){
+        ALUControlSignal="0110";
+    }
+    if(ALUOp1==1 &&ALUOp2==0 &&func7=="0000000"&& func3=="111"){
+        ALUControlSignal="0000";
+    }
+    if(ALUOp1==1 &&ALUOp2==0 &&func7=="0000000"&& func3=="110"){
+        ALUControlSignal="0001";
+    }
+    return ALUControlSignal;
+}
+
+void ImmGenerator(string opcode,string &imm,string instruction){
+   string type=notInstMap[opcode];
+   cout<<"typeinImmGenerator: "<<type<<endl;
+   if(type=="R"){
+      imm="0";
+   }
+   if(type=="I"){
+      imm=instruction.substr(20,12);
+   }
+   if(type=="sd"){
+      imm=instruction.substr(7,5)+instruction.substr(25,7);
+   }
+   if(type=="ld"){
+      imm=instruction.substr(20,12);
+   }
+   if(type=="B"){
+      imm=instruction.substr(8,4)+instruction.substr(25,6)+instruction.at(7)+instruction.at(31);
+   }
+}
+
+void FirstStage(IFID &IFIDObj){
+    
+    IFIDObj.IR=IM[PC];
+    IFIDObj.DPC=PC;
+    NPC=PC+4;
+    cout<<"-----NPC HDJCNKA--"<<NPC<<"I AM IN FIRST"<<endl;
+}
+
+void SecondStage(IDEX &IDEXObj,IFID &IFIDObj){
+    cout <<"i am in 2";
+    IDEXObj.DPC= IFIDObj.DPC;
+    IDEXObj.RS1L=IFIDObj.IR.substr(15,5);
+    IDEXObj.RS2L=IFIDObj.IR.substr(20,5);
+    ImmGenerator(IFIDObj.IR.substr(0,7),IDEXObj.IMM,IFIDObj.IR);
+    IDEXObj.FUNC3=IFIDObj.IR.substr(12,3);
+    IDEXObj.FUNC7=IFIDObj.IR.substr(25,7);
+    IDEXObj.RdL=IFIDObj.IR.substr(7,5);
+    cout<<IDEXObj.RdL<<endl;
+    ControlUnit(IFIDObj.IR.substr(0,7),IDEXObj.CW);
+    cout<<IFIDObj.IR.substr(15,5)<<endl;
+    IDEXObj.RS1=GPR[IFIDObj.IR.substr(15,5)];
+    cout<<IDEXObj.RS1;
+    IDEXObj.RS2=GPR[IFIDObj.IR.substr(20,5)];
+    cout<<"IDEXObj.RS2"<<IDEXObj.RS2;
+    
+}
+
+void ThirdStage(IDEX &IDEXObj,EXMO &EXMOObj){
+     cout <<"i am in 3";
+    string ALUSelect=ALUControl(IDEXObj.CW.ALUOp1,IDEXObj.CW.ALUOp2,IDEXObj.FUNC3,IDEXObj.FUNC7);
+    cout<<":scvbweawodihbhck";
+    cout<<IDEXObj.RS1;
+    cout<<"ALUSelect"<<ALUSelect;
+    int ALUSRCSELECTED;
+     if(IDEXObj.CW.ALUSrc){
+        bitset<12> binary(IDEXObj.IMM);
+        int x;
+        if(binary[11]==1){
+            x=-(static_cast<int>(binary.to_ulong())+1);
+        }else{
+            x=static_cast<int>(binary.to_ulong());
+        }
+        ALUSRCSELECTED=x;
+        
+    }
+    else{
+        ALUSRCSELECTED=IDEXObj.RS2;
+    }
+    EXMOObj.ALUOUT=ALU(ALUSelect,IDEXObj.RS1,ALUSRCSELECTED);
+    cout<<"EXMOObj.ALUOUT"<<EXMOObj.ALUOUT;
+    bool ALUZeroFlag=(IDEXObj.RS1==IDEXObj.RS2);
+    EXMOObj.CW = IDEXObj.CW;
+    if(IDEXObj.CW.Branch && ALUZeroFlag){
+        
+        bitset<12> immVal(IDEXObj.IMM);
+        int x;
+        cout<<"getting immVal";
+        cout<<(immVal[11]==1)<<endl;
+        if(immVal[11]==1){
+        immVal.flip();
+        cout<<immVal;
+         x = -(static_cast<int>(immVal.to_ulong()) + 1);
+         cout<<"herex   :"<<x;
+        }else{
+         x=static_cast<int>(immVal.to_ulong());
+       
+        }
+        PC=x*2+IDEXObj.DPC;
+        cout<<"x*2+IDEXObj.DPC"<<x;
+    }
+    else{
+        cout<<"pc change ho raha hai"<<endl;
+        PC=NPC;
+    }
+        EXMOObj.RdL =IDEXObj.RdL;
+        EXMOObj.RS2=IDEXObj.RS2;
+}
+void FourthStage(EXMO &EXMOObj,MOWB &MOWBObj){
+    cout <<"i am in 4";
+    cout <<"><"<<EXMOObj.CW.MemWrite<<"><";
+    if(EXMOObj.CW.MemWrite){
+        cout<<EXMOObj.RS2<<"not";
+        
+        DM[EXMOObj.ALUOUT]=EXMOObj.RS2;
+        
+    }
+    cout<<"HUJbsi";
+    if(EXMOObj.CW.MemRead){
+        MOWBObj.ALUOUT = DM[EXMOObj.ALUOUT];
+    }
+    MOWBObj.ALUOUT = EXMOObj.ALUOUT;
+    MOWBObj.CW = EXMOObj.CW;
+    MOWBObj.RdL=EXMOObj.RdL;
+}
+void FifthStage(MOWB &MOWBObj){
+    cout <<"i am in 5";
+    cout<<"MOWBObj.CW.RegWrite :"<<MOWBObj.CW.RegWrite<<endl;
+    cout<<"MOWBObj.CW.MemReg :"<<MOWBObj.CW.MemReg<<endl;
+    if(MOWBObj.CW.RegWrite){
+        if(MOWBObj.CW.MemReg){
+            GPR[MOWBObj.RdL]=MOWBObj.LDOUT;
+        }else{
+            GPR[MOWBObj.RdL]=MOWBObj.ALUOUT; 
+        }
+    }
+    cout <<"i am out of 5";
+}
+int main(){
+    InitializenotInstMap();
+    int tmppc=0;
+    ifstream me("o.txt");
+    while(me.eof()==0){
+        string str;
+        getline(me,str);
+        IM[tmppc]=str;
+        tmppc+=4;
+   }
+   IDEX IDEXO;
+   EXMO EXMOO;
+   IFID IFIDO;
+   MOWB MOWBO; 
+   cout<<"tmppc"<<tmppc<<endl;
+   int n=(tmppc)/4;
+   cout<<"n"<<n;
+   for(int i=0;i<n+5;i++){
+      cout<<PC<<"--------PC---------"<<endl;
+      cout<<NPC<<"-------NPC----------"<<endl;
+        if(i<=n+4&&i>3)
+        FifthStage(MOWBO);
+        if(i<=n+3&&i>2)
+        FourthStage(EXMOO,MOWBO);
+        if(i<=n+2&&i>1)
+        ThirdStage(IDEXO,EXMOO);
+        if(i<=n+1&&i>0)
+        SecondStage(IDEXO,IFIDO);
+        if(i<=n)
+        FirstStage(IFIDO);
+   }
+   ofstream Dmtxt("DataMemoryP.txt");
+   Dmtxt<<"AddressinDecimal :"<<"Value@Address"<<endl;
+   for(auto i:DM){
+      cout<<"goodbye";
+      cout<<i.first<<" :["<<i.second<<"]"<<"\n";
+      Dmtxt<<i.first<<" :["<<i.second<<"]"<<"\n";
+   }
+   ofstream Regtxt("RegisterfileP.txt");
+   Regtxt<<"Register :"<<"Value@Register"<<endl;
+   for(auto i:GPR){
+      bitset<12> m(i.first);
+      int r=static_cast<int>(m.to_ulong());
+      Regtxt<<"x"<<r<<" :["<<i.second<<"]"<<"\n";
+   }
+}
